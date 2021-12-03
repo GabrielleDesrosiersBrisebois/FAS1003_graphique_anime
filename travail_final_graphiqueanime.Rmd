@@ -1,0 +1,180 @@
+---
+title: 'Graphique #1: version animée'
+author: "Gabrielle Desrosiers-Brisebois"
+date: "03/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+library(hrbrthemes)
+library(extrafont)
+library(showtextdb)
+library(ggtext)
+library(broom)
+library(rgdal)
+library(plotly)
+library(htmlwidgets)
+```
+
+```{r include=FALSE}
+#Téléchargement des banques de données
+
+#elections' URL: https://doi.org/10.7910/DVN/PEJ5QU
+#dictionnaire de données URL: https://dataverse.harvard.edu/file.xhtml?fileId=4299754&version=6.0
+
+elections <- read.csv("datasets/1976-2020-president.csv")
+
+#electoral_votes' URL: https://worldpopulationreview.com/state-rankings/electoral-votes-by-#state
+
+electoral_votes <- read.csv("datasets/electoral_votes.csv")
+```
+
+```{r include=FALSE}
+#Joindre les deux banques de données
+
+#Modification du nom de la variable "ï..State"
+
+electoral_votes <- rename(electoral_votes, state = ï..State)
+
+#Convertir variable "state" avec des lettres minuscules
+
+elections$state <- elections$state %>%
+  str_to_title()
+
+#Joindre les deux banques de données
+
+data <- full_join(elections,
+                   electoral_votes,
+                   by = "state")
+```
+
+```{r include=FALSE}
+#Nettoyage des données
+
+#Nouvelle variable "percentage_voteshare"
+
+data <- data %>% 
+  mutate(percentage_voteshare = (candidatevotes/totalvotes)*100) %>% 
+  relocate(percentage_voteshare, .after = "totalvotes")
+
+data$percentage_voteshare <- round(data$percentage_voteshare, 2)
+```
+
+```{r include=FALSE}
+#Transformer les États en français
+
+data$state <- str_replace_all(data$state, c("California" = "Californie",
+                                            "District Of Columbia" = "District de Columbia",
+                                            "Florida" = "Floride",
+                                            "Georgia" = "Géorgie",
+                                            "Hawaii" = "Hawaï",
+                                            "Louisiana" = "Louisiane",
+                                            "New Mexico" = "Nouveau-Mexique",
+                                            "North Carolina" = "Caroline du Nord",
+                                            "North Dakota" = "Dakota du Nord",
+                                            "Pennsylvania" = "Pennsylvanie",
+                                            "South Carolina" = "Caroline du Sud",
+                                            "South Dakota" = "Dakota du Sud",
+                                            "Virginia" = "Virginie",
+                                            "West Virginie" = "Virginie-Occidentale"))
+```
+
+```{r include=FALSE}
+#Nouveau dataframes
+
+df_dem <- subset(data, party_detailed == "DEMOCRAT") %>% 
+  filter(str_detect(year, "2020")) %>% 
+  select("year", "state", "party_detailed", "percentage_voteshare")
+
+df_rep <- subset(data, party_detailed == "REPUBLICAN") %>% 
+  filter(str_detect(year, "2020")) %>% 
+  select("state", "party_detailed", "percentage_voteshare")
+
+df_graph1 <- df_dem %>% 
+  left_join(df_rep,
+            by = "state") 
+
+colnames(df_graph1) <- c("year", "État", "party.x", "Pourcentage obtenu par Joe Biden",
+                         "party.y", "Pourcentage obtenu par Donald Trump")
+
+#Nouvelle variable "vote_difference"
+
+df_graph1 <- df_graph1 %>% 
+  mutate(vote_difference = (`Pourcentage obtenu par Donald Trump` - `Pourcentage obtenu par Joe Biden`))
+
+df_graph1$vote_difference <- abs(df_graph1$vote_difference)
+```
+
+```{r include=FALSE}
+#Premier graphique
+
+g1 <- ggplot(data = df_graph1) +
+  geom_segment(aes(x = reorder(État, -vote_difference), xend = État,
+                   y = `Pourcentage obtenu par Joe Biden`, yend = `Pourcentage obtenu par Donald Trump`),
+                   color = "#b7b7bd", size = 0.7) +
+  geom_point(aes(x = État,
+                 y = `Pourcentage obtenu par Joe Biden`),
+                 color = "#000e89", size = 1.3, alpha = 0.8) +
+  geom_point(aes(x = État,
+                 y = `Pourcentage obtenu par Donald Trump`),
+                 color = "#ca1504", size = 1.3, alpha = 0.8) +
+  
+  scale_y_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), 
+                     limits = c(0, 100),
+                     labels = c("0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100 %")) +
+  
+  coord_flip() +
+  
+  labs(title = "Élection présidentielle de 2020",
+  subtitle =  "Distribution du pourcentage de vote pour <span style = 'color:#000e89;'>**Joe Biden**</span> et <span style = 'color:#ca1504;'>**Donald Trump**</span>, par État") +
+  
+  theme_minimal() +
+  theme(plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white", color = "white", size = 0.5, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.5, linetype = "solid", color = "white"),
+        panel.grid.minor = element_line(size = 0.25, linetype = "solid", color = "white"),
+        axis.title.y = element_blank(),
+        axis.text.y = element_text(size = 6.5,
+                                   color = "black"),
+        axis.title.x = element_blank(),
+        text = element_text(family = "Calibri Light"),
+        plot.title = element_text(family = "Calibri", size = 12),
+        plot.subtitle = element_markdown(family = "Calibri", size = 9)) 
+```
+
+## Graphique #1 - Distribution du pourcentage de vote pour Biden et Trump, par État
+
+```{r include=FALSE}
+#Police de caractère pour le titre et l'axe des Y
+
+f1 <- list(
+  family = "Calibri",
+  size = "16",
+  color = "black"
+)
+
+#Graphique animé
+
+fig1 <- ggplotly(g1)
+
+fig1 <- fig1 %>% 
+  layout(title = list(text = "Élection présidentielle de 2020<br>Distribution du pourcentage de vote pour <span style = 'color:#000e89;'>Joe Biden</span> et <span style = 'color:#ca1504;'>Donald Trump</span>, par État",
+                       y = 4, 
+                       x = 0.5, 
+                       xanchor = "center", 
+                       yanchor = "top",
+                       font = f1))
+
+saveWidget(fig1, file = "graphique_1_anime.html")
+```
+
+```{r echo=FALSE}
+fig1
+```
+
+
